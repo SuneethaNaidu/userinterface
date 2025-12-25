@@ -1,115 +1,102 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+import numpy as np
+import joblib
 import os
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
 
-st.set_page_config(page_title="House Price Prediction", layout="wide")
-st.title("🏠 House Price Prediction App")
+# --------------------------------------------------
+# PAGE CONFIG
+# --------------------------------------------------
+st.set_page_config(page_title="House Price Prediction", layout="centered")
 
-# -----------------------------
-# SAFE DATA LOADING
-# -----------------------------
+# --------------------------------------------------
+# DATASET PATH (YOUR LOCAL PATH)
+# --------------------------------------------------
+DATASET_PATH = r"C:\tasks\archive (3)\UCI_Real_Estate_Valuation.xlsx"
+
+# --------------------------------------------------
+# MODEL PATH (same folder as this file)
+# --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "house_price_model.pkl")
+
+# --------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------
+@st.cache_data
 def load_data():
-    try:
-        file_name = "C:/tasks/archive (3)/UCI_Real_Estate_Valuation.xlsx"
+    return pd.read_excel(DATASET_PATH)
 
-        if not os.path.exists(file_name):
-            st.error(f"❌ Dataset not found: {file_name}")
-            st.stop()
+# --------------------------------------------------
+# TRAIN MODEL & SAVE
+# --------------------------------------------------
+def train_and_save_model(df):
+    X = df[
+        [
+            "X1 transaction date",
+            "X2 house age",
+            "X3 distance to the nearest MRT station",
+            "X4 number of convenience stores",
+            "X5 latitude",
+            "X6 longitude",
+        ]
+    ]
 
-        df = pd.read_excel(file_name)
-
-        if "No" in df.columns:
-            df.drop(columns=["No"], inplace=True)
-
-        df = df.rename(columns={
-            "X1 transaction date": "transaction_date",
-            "X2 house age": "house_age",
-            "X3 distance to the nearest MRT station": "distance_to_mrt",
-            "X4 number of convenience stores": "num_convenience_stores",
-            "X5 latitude": "latitude",
-            "X6 longitude": "longitude",
-            "Y house price of unit area": "house_price"
-        })
-
-        df.fillna(df.median(numeric_only=True), inplace=True)
-        return df
-
-    except Exception as e:
-        st.error("❌ Error while loading dataset")
-        st.exception(e)
-        st.stop()
-
-df = load_data()
-
-# -----------------------------
-# MODEL TRAINING
-# -----------------------------
-try:
-    X = df.drop("house_price", axis=1)
-    y = df["house_price"]
+    y = df["Y house price of unit area"]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model = LinearRegression()
     model.fit(X_train, y_train)
 
-except Exception as e:
-    st.error("❌ Error during model training")
-    st.exception(e)
-    st.stop()
+    joblib.dump(model, MODEL_PATH)
+    return model
 
-# -----------------------------
-# USER INPUT
-# -----------------------------
-st.sidebar.header("📋 Enter House Details")
+# --------------------------------------------------
+# LOAD OR TRAIN MODEL
+# --------------------------------------------------
+if os.path.exists(MODEL_PATH):
+    model = joblib.load(MODEL_PATH)
+else:
+    df = load_data()
+    model = train_and_save_model(df)
 
-inputs = {}
-for col in X.columns:
-    inputs[col] = st.sidebar.number_input(
-        col.replace("_", " ").title(),
-        float(df[col].min()),
-        float(df[col].max()),
-        float(df[col].mean())
+# --------------------------------------------------
+# STREAMLIT UI
+# --------------------------------------------------
+st.title("🏠 House Price Prediction")
+st.write("Predict house price using UCI Real Estate Valuation dataset")
+
+# --------------------------------------------------
+# INPUTS
+# --------------------------------------------------
+transaction_date = st.number_input("Transaction Date (e.g., 2013.5)", value=2013.5)
+house_age = st.number_input("House Age (years)", min_value=0.0, value=10.0)
+distance_mrt = st.number_input(
+    "Distance to nearest MRT station (meters)", min_value=0.0, value=500.0
+)
+stores = st.number_input("Number of convenience stores", min_value=0, value=5)
+latitude = st.number_input("Latitude", value=24.98)
+longitude = st.number_input("Longitude", value=121.54)
+
+# --------------------------------------------------
+# PREDICTION
+# --------------------------------------------------
+if st.button("Predict Price"):
+    input_data = np.array(
+        [[transaction_date, house_age, distance_mrt, stores, latitude, longitude]]
     )
 
-input_df = pd.DataFrame([inputs])
+    prediction = model.predict(input_data)
 
-# -----------------------------
-# PREDICTION
-# -----------------------------
-try:
-    prediction = model.predict(input_df)[0]
-    st.success(f"💰 Predicted House Price: {prediction:.2f}")
-except Exception as e:
-    st.error("❌ Prediction error")
-    st.exception(e)
+    st.success(f"💰 Predicted House Price (per unit area): {prediction[0]:.2f}")
 
-# -----------------------------
-# VISUALIZATION
-# -----------------------------
-st.subheader("📊 House Price Distribution")
-
-try:
-    fig, ax = plt.subplots()
-    ax.hist(df["house_price"], bins=30)
-    ax.set_xlabel("House Price")
-    ax.set_ylabel("Frequency")
-    st.pyplot(fig)
-except Exception as e:
-    st.error("❌ Plot error")
-    st.exception(e)
-
-st.subheader("📌 Feature Importance")
-
-try:
-    fig2, ax2 = plt.subplots()
-    ax2.barh(X.columns, model.feature_importances_)
-    st.pyplot(fig2)
-except Exception as e:
-    st.error("❌ Feature importance plot error")
-    st.exception(e)
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("✅ **Task 3 – Streamlit House Price Prediction App**")
