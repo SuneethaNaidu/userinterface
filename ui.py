@@ -8,7 +8,8 @@ from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="House Price Prediction", layout="centered")
 
-DATASET_PATH = "C:/tasks/UCI_Real_Estate_Valuation.xlsx"
+DATASET_PATH = "UCI_Real_Estate_Valuation.xlsx"
+
 MODEL_PATH = "house_price_model.pkl"
 
 @st.cache_data
